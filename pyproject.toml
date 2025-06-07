@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "Muhammad Fathur Rizky" }
 ]
 keywords = ["langchain", "sql", "qa", "question-answering", "llm", "database"]
 classifiers = [
@@ -98,23 +98,13 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/langchain-sql-qa"
-Documentation = "https://github.com/yourusername/langchain-sql-qa#readme"
-Repository = "https://github.com/yourusername/langchain-sql-qa"
-Issues = "https://github.com/yourusername/langchain-sql-qa/issues"
+Homepage = "https://github.com/fathurwithyou/langchain-sql-qa"
+Documentation = "https://github.com/fathurwithyou/langchain-sql-qa#readme"
+Repository = "https://github.com/fathurwithyou/langchain-sql-qa"
+Issues = "https://github.com/fathurwithyou/langchain-sql-qa/issues"
 
 [project.scripts]
-sql-qa-demo = "demo_complete:main"
 sql-qa-server = "app.main:main"
-
-# Build system
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-# Hatch configuration
-[tool.hatch.build.targets.wheel]
-packages = ["app"]
 
 [tool.hatch.build.targets.sdist]
 include = [
