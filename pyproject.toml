@@ -1,0 +1,250 @@
+[project]
+name = "langchain-sql-qa"
+version = "1.0.0"
+description = "Complete LangChain SQL QA implementation following official tutorial"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+keywords = ["langchain", "sql", "qa", "question-answering", "llm", "database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+# Core dependencies
+dependencies = [
+    # Core FastAPI and web framework
+    "fastapi>=0.115.12",
+    "uvicorn[standard]>=0.34.3",
+    # LangChain ecosystem
+    "langchain>=0.3.25",
+    "langchain-community",
+    "langchain-core>=0.3.64",
+    "langchain-google-genai>=2.1.5",
+    "langchain-text-splitters>=0.3.8",
+    "langgraph>=0.2.50",
+    "langsmith>=0.3.45",
+    # Database and SQL
+    "SQLAlchemy>=2.0.41",
+    "psycopg2-binary>=2.9.10",
+    # Configuration and validation
+    "pydantic>=2.11.5",
+    "pydantic-settings>=2.9.1",
+    "python-dotenv>=1.1.0",
+    # Additional utilities
+    "tenacity>=9.1.2",
+    "typing-extensions>=4.14.0",
+    "annotated-types>=0.7.0",
+    # Logging and monitoring
+    "colorama>=0.4.6",
+    "langchain-openai>=0.3.21",
+]
+
+# Optional dependencies
+[project.optional-dependencies]
+# Vector search capabilities
+vector = [
+    "langchain-openai>=0.2.17",
+    "openai>=1.57.4",
+    "numpy>=2.2.6",
+    "langchain-chroma>=0.1.17",
+    "chromadb>=0.5.20",
+]
+
+# Development tools
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.1",
+    "black>=24.0.0",
+    "ruff>=0.6.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.5.0",
+]
+
+# Documentation
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.5.44",
+    "mkdocs-swagger-ui-tag>=0.6.8",
+]
+
+# Testing
+test = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.12.0",
+    "httpx>=0.28.1",
+    "factory-boy>=3.3.0",
+]
+
+# All development dependencies
+all = [
+    "langchain-sql-qa[vector,dev,docs,test]"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/langchain-sql-qa"
+Documentation = "https://github.com/yourusername/langchain-sql-qa#readme"
+Repository = "https://github.com/yourusername/langchain-sql-qa"
+Issues = "https://github.com/yourusername/langchain-sql-qa/issues"
+
+[project.scripts]
+sql-qa-demo = "demo_complete:main"
+sql-qa-server = "app.main:main"
+
+# Build system
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Hatch configuration
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/app",
+    "/tests",
+    "/demo_complete.py",
+    "/README.md",
+    "/pyproject.toml",
+    "/.env.example",
+]
+
+# UV configuration
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "black>=24.0.0",
+    "ruff>=0.6.0",
+    "mypy>=1.8.0",
+]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# Ruff configuration
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "ARG001", # unused arguments in functions
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+    "W191",  # indentation contains tabs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["ARG", "FBT"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "--tb=short",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests", 
+    "slow: Slow tests",
+    "chain: Chain approach tests",
+    "agent: Agent approach tests",
+    "vector: Vector search tests",
+    "api: API endpoint tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
