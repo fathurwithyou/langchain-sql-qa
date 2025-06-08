@@ -50,6 +50,7 @@ dependencies = [
     # Logging and monitoring
     "colorama>=0.4.6",
     "langchain-openai>=0.3.21",
+    "pytest>=8.4.0",
 ]
 
 # Optional dependencies

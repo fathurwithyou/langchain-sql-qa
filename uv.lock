@@ -29,6 +29,7 @@ dependencies = [
     { name = "propcache" },
     { name = "yarl" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/76/cc6f37a12372dd72891dad5ffc3fc71375c2f92bb4a59f7ac11119332559/aiohttp-3.12.10.tar.gz", hash = "sha256:a9871b1b1381f8d8241f3ff3de5fcb6e2fdcfe8af43c35bb0496b8be550c5fb9", size = 7810445, upload-time = "2025-06-07T12:27:42.107Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/06/17/e1bbc25c5f64d860c63880999b0c1dbdf45183b88b771035901b83adabf0/aiohttp-3.12.10-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:2a632c874c102316f94fce1a76aa7dc9d3b2c19b0c6f9a971158618e53429bc3", size = 707920, upload-time = "2025-06-07T12:25:07.903Z" },
     { url = "https://files.pythonhosted.org/packages/6d/78/589bac4edb36b8b3c9a67212390b9953b562b7405e8915ac636adb062cce/aiohttp-3.12.10-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:f040d9c100ea258e8bd8fa0f0853734afb640cbe7c8ed060826f1c2cde0c9fee", size = 480208, upload-time = "2025-06-07T12:25:09.882Z" },
@@ -1296,7 +1297,7 @@ wheels = [
 [[package]]
 name = "langchain-sql-qa"
 version = "1.0.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "annotated-types" },
     { name = "colorama" },
@@ -1312,6 +1313,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pytest" },
     { name = "python-dotenv" },
     { name = "sqlalchemy" },
     { name = "tenacity" },
@@ -1412,6 +1414,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pydantic", specifier = ">=2.11.5" },
     { name = "pydantic-settings", specifier = ">=2.9.1" },
+    { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
