@@ -119,12 +119,12 @@ class SQLAgentQA:
 
     def _setup_system_prompt(self):
         """Setup system prompt for the agent"""
-        base_system_message = """
+        base_system_message = f"""
         You are an agent designed to interact with a SQL database.
-        Given an input question, create a syntactically correct {dialect} query to run,
+        Given an input question, create a syntactically correct {self.db.dialect} query to run,
         then look at the results of the query and return the answer. Unless the user
         specifies a specific number of examples they wish to obtain, always limit your
-        query to at most {top_k} results.
+        query to at most {5} results.
 
         You can order the results by a relevant column to return the most interesting
         examples in the database. Never query for all the columns from a specific table,
@@ -140,10 +140,7 @@ class SQLAgentQA:
         can query. Do NOT skip this step.
 
         Then you should query the schema of the most relevant tables.
-        """.format(  # noqa: UP032
-            dialect=self.db.dialect,
-            top_k=5,
-        )
+        """
 
         if self.enable_vector_search:
             vector_search_suffix = (
@@ -166,7 +163,30 @@ class SQLAgentQA:
             logger.info("SQL Agent initialized successfully")
         except Exception as e:
             logger.error(f"Error setting up agent: {e}")
-            raise QueryProcessingError(f"Failed to setup agent: {str(e)}") from e
+            raise QueryProcessingError(
+                f"Failed to setup agent: {str(e)}") from e
+
+    def _extract_sql_query_from_tool_calls(self, tool_calls) -> str | None:
+        """Extract SQL query from tool calls, handling both dict and object formats"""
+        if not tool_calls:
+            return None
+
+        for tool_call in tool_calls:
+            # Handle both dictionary and object formats
+            if isinstance(tool_call, dict):
+                # Dictionary format
+                tool_name = tool_call.get('name') or tool_call.get('tool_name')
+                args = tool_call.get('args', {})
+            else:
+                # Object format
+                tool_name = getattr(tool_call, 'name', None) or getattr(tool_call, 'tool_name', None)
+                args = getattr(tool_call, 'args', {})
+
+            # Check if this is a SQL query tool call
+            if tool_name == "sql_db_query" and isinstance(args, dict) and "query" in args:
+                return args["query"]
+
+        return None
 
     def run(self, question: str, stream: bool = False) -> dict[str, Any]:
         """
@@ -177,9 +197,10 @@ class SQLAgentQA:
             stream: Whether to stream intermediate steps
 
         Returns:
-            Dictionary with the answer and metadata
+            Dictionary with the answer, metadata, and generated query
         """
         try:
+            generated_query = None
             if stream:
                 steps = []
                 for step in self.agent.stream(
@@ -192,26 +213,43 @@ class SQLAgentQA:
                         logger.info(
                             f"Agent step: {last_message.type if hasattr(last_message, 'type') else 'message'}")
 
+                        # Extract SQL query from tool calls
+                        tool_calls = getattr(last_message, 'tool_calls', None)
+                        if tool_calls:
+                            sql_query = self._extract_sql_query_from_tool_calls(tool_calls)
+                            if sql_query:
+                                generated_query = sql_query
+                                logger.info(f"Agent generated SQL query: {generated_query}")
+
                 final_answer = steps[-1]["messages"][-1].content if steps else "No answer generated"
 
                 return {
                     "question": question,
                     "answer": final_answer,
                     "steps": steps,
-                    "success": True
+                    "success": True,
+                    "query": generated_query
                 }
             else:
-
                 result = self.agent.invoke(
                     {"messages": [{"role": "user", "content": question}]}
                 )
-
                 final_answer = result["messages"][-1].content
+
+                # Extract SQL query from all messages
+                for message in result["messages"]:
+                    tool_calls = getattr(message, 'tool_calls', None)
+                    if tool_calls:
+                        sql_query = self._extract_sql_query_from_tool_calls(tool_calls)
+                        if sql_query:
+                            generated_query = sql_query
+                            break
 
                 return {
                     "question": question,
                     "answer": final_answer,
-                    "success": True
+                    "success": True,
+                    "query": generated_query
                 }
 
         except Exception as e:
@@ -220,7 +258,8 @@ class SQLAgentQA:
                 "question": question,
                 "answer": f"I encountered an error: {str(e)}",
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "query": None
             }
 
     def run_streaming(self, question: str):

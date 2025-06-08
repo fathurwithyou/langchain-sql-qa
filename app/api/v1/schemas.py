@@ -49,6 +49,7 @@ class ApprovalResponse(BaseResponse):
 class AgentAnswerResponse(BaseResponse):
     question: str
     answer: str = Field(..., description="Natural language answer")
+    query: str | None = Field(None, description="Generated SQL query by the agent")
     approach: str = Field("agent", description="Approach used (agent)")
     available_tools: list[str] = Field(default_factory=list, description="Available tools used by agent")
 

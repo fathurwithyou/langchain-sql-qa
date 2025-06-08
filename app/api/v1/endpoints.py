@@ -37,6 +37,32 @@ def get_agent_qa():
     return _agent_qa
 
 
+def serialize_message(message):
+    """Safely serialize LangChain message objects"""
+    try:
+        return {
+            "type": getattr(message, 'type', 'unknown'),
+            "content": getattr(message, 'content', ''),
+            "id": getattr(message, 'id', None),
+            "name": getattr(message, 'name', None),
+            "tool_calls": [
+                {
+                    "name": getattr(tc, 'name', tc.get('name', 'unknown') if isinstance(tc, dict) else 'unknown'),
+                    "args": getattr(tc, 'args', tc.get('args', {}) if isinstance(tc, dict) else {}),
+                    "id": getattr(tc, 'id', tc.get('id', None) if isinstance(tc, dict) else None)
+                }
+                for tc in getattr(message, 'tool_calls', [])
+            ] if hasattr(message, 'tool_calls') and message.tool_calls else []
+        }
+    except Exception as e:
+        logger.warning(f"Error serializing message: {e}")
+        return {
+            "type": "error",
+            "content": f"Could not serialize message: {str(e)}",
+            "error": str(e)
+        }
+
+
 @router.post("/chain/ask", response_model=schemas.ChainAnswerResponse)
 def ask_question_chain(request: schemas.QuestionRequest):
     """
@@ -166,6 +192,7 @@ def ask_question_agent(request: schemas.QuestionRequest):
             success=result["success"],
             approach="agent",
             error=result.get("error"),
+            query=result.get("query"),
             available_tools=agent_qa.get_available_tools()
         )
     except Exception as e:
@@ -181,21 +208,51 @@ def ask_question_agent_streaming(request: schemas.QuestionRequest):
     def generate_stream():
         try:
             agent_qa = get_agent_qa()
+            step_count = 0
+
             for step in agent_qa.run_streaming(request.question):
-                if "messages" in step and len(step["messages"]) > 0:
-                    last_message = step["messages"][-1]
+                step_count += 1
+
+                try:
+
                     step_data = {
-                        "type": getattr(last_message, 'type', 'message'),
-                        "content": getattr(last_message, 'content', str(last_message)),
-                        "step": step
+                        "step_number": step_count,
+                        "timestamp": None,
                     }
+
+                    if "messages" in step and len(step["messages"]) > 0:
+                        last_message = step["messages"][-1]
+                        step_data.update({
+                            "message": serialize_message(last_message),
+                            "total_messages": len(step["messages"])
+                        })
+
+                        logger.info(
+                            f"Streaming step {step_count}: {step_data['message']['type']}")
+
+                    if "error" in step:
+                        step_data["error"] = step["error"]
+
+                    if "success" in step:
+                        step_data["success"] = step["success"]
+
                     yield f"data: {json.dumps(step_data)}\n\n"
 
-            yield f"data: {json.dumps({'status': 'complete'})}\n\n"
+                except Exception as serialize_error:
+                    logger.error(
+                        f"Error serializing step {step_count}: {serialize_error}")
+                    error_data = {
+                        "step_number": step_count,
+                        "error": f"Serialization error: {str(serialize_error)}",
+                        "step_type": str(type(step))
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+
+            yield f"data: {json.dumps({'status': 'complete', 'total_steps': step_count})}\n\n"
 
         except Exception as e:
             logger.error(f"Error in streaming agent QA: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'error': str(e), 'status': 'failed'})}\n\n"
 
     return StreamingResponse(
         generate_stream(),
@@ -348,6 +405,7 @@ def compare_approaches(request: schemas.QuestionRequest):
     except Exception as e:
         logger.error(f"Error comparing approaches: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @router.post("/agent/describe-table", response_model=schemas.TableDescriptionResponse)
 def describe_table(request: schemas.TableDescriptionRequest):
