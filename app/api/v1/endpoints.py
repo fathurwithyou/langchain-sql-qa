@@ -121,42 +121,89 @@ def ask_question_chain_with_approval(request: schemas.QuestionWithApprovalReques
         chain_qa = get_chain_qa()
 
         if request.action == "start":
+            steps = []
+            generated_query = None
 
-            steps = list(chain_qa.run_with_approval(
-                request.question, request.thread_id))
+            for step in chain_qa.run_with_approval(request.question, request.thread_id):
+                steps.append(step)
+                logger.info(f"Approval workflow step: {step}")
 
-            for step in steps:
-                if isinstance(step, dict) and step.get("approval_required"):
-                    return schemas.ApprovalResponse(
-                        thread_id=request.thread_id,
-                        status="awaiting_approval",
-                        query=step.get("query"),
-                        message="Query generated. Do you want to execute it?",
-                        success=True
-                    )
+                if isinstance(step, dict) and "write_query" in step:
+                    query_result = step["write_query"]
+                    if isinstance(query_result, dict) and "query" in query_result:
+                        generated_query = query_result["query"]
+                        logger.info(
+                            f"Captured generated query: {generated_query}")
 
-            return schemas.ApprovalResponse(
-                thread_id=request.thread_id,
-                status="error",
-                message="Could not generate query for approval",
-                success=False
-            )
+            if generated_query:
+                return schemas.ApprovalResponse(
+                    thread_id=request.thread_id,
+                    status="awaiting_approval",
+                    query=generated_query,
+                    message=f"Query generated: '{generated_query}'. Do you want to execute it?",
+                    success=True
+                )
+            else:
+                try:
+                    config = {"configurable": {"thread_id": request.thread_id}}
+                    current_state = chain_qa.graph_with_approval.get_state(
+                        config)
+
+                    if current_state and hasattr(current_state, 'values'):
+                        state_values = current_state.values
+                        if "query" in state_values:
+                            return schemas.ApprovalResponse(
+                                thread_id=request.thread_id,
+                                status="awaiting_approval",
+                                query=state_values["query"],
+                                message=f"Query generated: '{state_values['query']}'. Do you want to execute it?",
+                                success=True
+                            )
+                except Exception as state_error:
+                    logger.warning(f"Could not get state: {state_error}")
+
+                return schemas.ApprovalResponse(
+                    thread_id=request.thread_id,
+                    status="error",
+                    message="Could not generate or capture query for approval",
+                    success=False,
+                    error="No query was generated"
+                )
 
         elif request.action == "approve":
-
             steps = chain_qa.continue_after_approval(request.thread_id)
-
             final_answer = "Processing completed"
+            executed_query = None
+
             for step in steps:
-                if "generate_answer" in step:
-                    final_answer = step["generate_answer"].get(
-                        "answer", final_answer)
+                logger.info(f"Post-approval step: {step}")
+
+                if isinstance(step, dict):
+                    if "execute_query" in step:
+                        execute_result = step["execute_query"]
+                        if isinstance(execute_result, dict) and "result" in execute_result:
+                            logger.info("Query executed successfully")
+
+                    if "generate_answer" in step:
+                        answer_result = step["generate_answer"]
+                        if isinstance(answer_result, dict) and "answer" in answer_result:
+                            final_answer = answer_result["answer"]
+
+            try:
+                config = {"configurable": {"thread_id": request.thread_id}}
+                final_state = chain_qa.graph_with_approval.get_state(config)
+                if final_state and hasattr(final_state, 'values'):
+                    state_values = final_state.values
+                    executed_query = state_values.get("query")
+            except Exception as state_error:
+                logger.warning(f"Could not get final state: {state_error}")
 
             return schemas.ApprovalResponse(
                 thread_id=request.thread_id,
                 status="completed",
+                query=executed_query,
                 answer=final_answer,
-                message="Query executed and answer generated",
+                message="Query executed successfully and answer generated",
                 success=True
             )
 
@@ -170,11 +217,19 @@ def ask_question_chain_with_approval(request: schemas.QuestionWithApprovalReques
 
         else:
             raise HTTPException(
-                status_code=400, detail="Invalid action. Use 'start', 'approve', or 'reject'")
+                status_code=400,
+                detail="Invalid action. Use 'start', 'approve', or 'reject'"
+            )
 
     except Exception as e:
         logger.error(f"Error in approval workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return schemas.ApprovalResponse(
+            thread_id=request.thread_id,
+            status="error",
+            message=f"Error in approval workflow: {str(e)}",
+            success=False,
+            error=str(e)
+        )
 
 
 @router.post("/agent/ask", response_model=schemas.AgentAnswerResponse)

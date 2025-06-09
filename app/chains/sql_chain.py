@@ -62,12 +62,14 @@ class SQLChainQA:
     def write_query(self, state: State) -> dict[str, str]:
         """Generate SQL query to fetch information."""
         try:
-            prompt = self.query_prompt_template.invoke({
-                "dialect": self.db.dialect,
-                "top_k": 10,
-                "table_info": self.db.get_table_info(),
-                "input": state["question"],
-            })
+            prompt = self.query_prompt_template.invoke(
+                {
+                    "dialect": self.db.dialect,
+                    "top_k": 10,
+                    "table_info": self.db.get_table_info(),
+                    "input": state["question"],
+                }
+            )
 
             structured_llm = self.llm.with_structured_output(QueryOutput)
             result = structured_llm.invoke(prompt)
@@ -77,8 +79,7 @@ class SQLChainQA:
 
         except Exception as e:
             logger.error(f"Error generating SQL query: {e}")
-            raise QueryProcessingError(
-                f"Failed to generate SQL query: {str(e)}") from e
+            raise QueryProcessingError(f"Failed to generate SQL query: {str(e)}") from e
 
     def execute_query(self, state: State) -> dict[str, str]:
         """Execute SQL query."""
@@ -87,13 +88,13 @@ class SQLChainQA:
             result = execute_query_tool.invoke(state["query"])
 
             logger.info(
-                f"Query executed successfully. Result length: {len(str(result))}")
+                f"Query executed successfully. Result length: {len(str(result))}"
+            )
             return {"result": result}
 
         except Exception as e:
             logger.error(f"Error executing SQL query: {e}")
-            raise QueryProcessingError(
-                f"Failed to execute SQL query: {str(e)}") from e
+            raise QueryProcessingError(f"Failed to execute SQL query: {str(e)}") from e
 
     def generate_answer(self, state: State) -> dict[str, str]:
         """Answer question using retrieved information as context."""
@@ -101,9 +102,9 @@ class SQLChainQA:
             prompt = (
                 "Given the following user question, corresponding SQL query, "
                 "and SQL result, answer the user question.\n\n"
-                f'Question: {state["question"]}\n'
-                f'SQL Query: {state["query"]}\n'
-                f'SQL Result: {state["result"]}'
+                f"Question: {state['question']}\n"
+                f"SQL Query: {state['query']}\n"
+                f"SQL Result: {state['result']}"
             )
 
             response = self.llm.invoke(prompt)
@@ -118,19 +119,16 @@ class SQLChainQA:
     def _setup_graph(self):
         """Setup LangGraph for orchestrating the chain"""
 
-        graph_builder = StateGraph(State).add_sequence([
-            self.write_query,
-            self.execute_query,
-            self.generate_answer
-        ])
+        graph_builder = StateGraph(State).add_sequence(
+            [self.write_query, self.execute_query, self.generate_answer]
+        )
         graph_builder.add_edge(START, "write_query")
 
         self.graph = graph_builder.compile()
 
         memory = MemorySaver()
         self.graph_with_approval = graph_builder.compile(
-            checkpointer=memory,
-            interrupt_before=["execute_query"]
+            checkpointer=memory, interrupt_before=["execute_query"]
         )
 
     def run(self, question: str, stream: bool = False) -> dict[str, Any]:
@@ -148,8 +146,7 @@ class SQLChainQA:
             if stream:
                 steps = []
                 for step in self.graph.stream(
-                    {"question": question},
-                    stream_mode="updates"
+                    {"question": question}, stream_mode="updates"
                 ):
                     steps.append(step)
                     logger.info(f"Chain step: {step}")
@@ -159,7 +156,6 @@ class SQLChainQA:
                 )
                 return final_state.values
             else:
-
                 result = self.graph.invoke({"question": question})
                 return result
 
@@ -167,7 +163,9 @@ class SQLChainQA:
             logger.error(f"Error running chain: {e}")
             raise QueryProcessingError(f"Chain execution failed: {str(e)}") from e
 
-    def run_with_approval(self, question: str, thread_id: str = "1") -> Generator[Any, None, None]:
+    def run_with_approval(
+        self, question: str, thread_id: str = "1"
+    ) -> Generator[Any, None, None]:
         """
         Run chain with human-in-the-loop approval before query execution
 
@@ -181,21 +179,48 @@ class SQLChainQA:
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-
-            steps = []
             for step in self.graph_with_approval.stream(
                 {"question": question},
                 config,
                 stream_mode="updates",
             ):
-                steps.append(step)
+                logger.info(f"Approval workflow step: {step}")
                 yield step
 
-            yield {"approval_required": True, "query": steps[-1].get("write_query", {}).get("query")}
+            try:
+                current_state = self.graph_with_approval.get_state(config)
+                if current_state and hasattr(current_state, "values"):
+                    state_values = current_state.values
+                    logger.info(f"Current state values: {state_values}")
+
+                    yield {
+                        "approval_required": True,
+                        "query": state_values.get("query"),
+                        "state": "awaiting_approval",
+                        "message": "Query generated and ready for approval",
+                    }
+                else:
+                    logger.warning("Could not get current state for approval")
+                    yield {
+                        "approval_required": True,
+                        "query": None,
+                        "error": "Could not retrieve generated query",
+                    }
+            except Exception as state_error:
+                logger.error(f"Error getting state for approval: {state_error}")
+                yield {
+                    "approval_required": True,
+                    "query": None,
+                    "error": f"State retrieval failed: {str(state_error)}",
+                }
 
         except Exception as e:
             logger.error(f"Error in approval workflow: {e}")
-            raise QueryProcessingError(f"Approval workflow failed: {str(e)}") from e
+            yield {
+                "error": str(e),
+                "status": "failed",
+                "message": "Approval workflow failed",
+            }
 
     def continue_after_approval(self, thread_id: str = "1") -> dict[str, Any]:
         """Continue execution after approval"""
@@ -204,9 +229,7 @@ class SQLChainQA:
         try:
             steps = []
             for step in self.graph_with_approval.stream(
-                None,
-                config,
-                stream_mode="updates"
+                None, config, stream_mode="updates"
             ):
                 steps.append(step)
                 logger.info(f"Post-approval step: {step}")
@@ -216,7 +239,8 @@ class SQLChainQA:
         except Exception as e:
             logger.error(f"Error continuing after approval: {e}")
             raise QueryProcessingError(
-                f"Post-approval execution failed: {str(e)}") from e
+                f"Post-approval execution failed: {str(e)}"
+            ) from e
 
     def get_graph_visualization(self) -> bytes:
         """Get mermaid visualization of the graph"""
